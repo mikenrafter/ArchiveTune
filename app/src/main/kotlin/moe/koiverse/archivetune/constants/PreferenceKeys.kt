@@ -84,6 +84,9 @@ val ArtistSeparatorsKey = stringPreferencesKey("artistSeparators")
 val MaxImageCacheSizeKey = intPreferencesKey("maxImageCacheSize")
 val MaxSongCacheSizeKey = intPreferencesKey("maxSongCacheSize")
 
+val DownloadPathKey = stringPreferencesKey("dlPath")
+val DownloadExtraPathKey = stringPreferencesKey("dlExtraPath")
+
 val PauseListenHistoryKey = booleanPreferencesKey("pauseListenHistory")
 val PauseSearchHistoryKey = booleanPreferencesKey("pauseSearchHistory")
 val DisableScreenshotKey = booleanPreferencesKey("disableScreenshot")
