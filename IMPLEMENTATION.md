@@ -1,5 +1,42 @@
 # Implementation Guide: Cross-Repository Feature Integration
 
+## ⚠️ IMPORTANT: Current Status
+
+This implementation is **PARTIALLY COMPLETE**. The following has been accomplished:
+
+### ✅ Completed in ArchiveTune Repository:
+1. OuterTune added as a submodule at `/OuterTune`
+2. Download path preference keys (`DownloadPathKey`, `DownloadExtraPathKey`) added to `PreferenceKeys.kt`
+3. This IMPLEMENTATION.md document created with full instructions
+
+### ✅ Completed in OuterTune Submodule (uncommitted):
+1. LastFM module copied with proper package renaming (`com.dd3boh.outertune.lastfm`)
+2. ScrobbleManager utility added
+3. settings.gradle.kts updated to include `:lastfm` module
+4. app/build.gradle.kts updated to depend on lastfm module
+
+### ⚠️ Required Manual Actions:
+
+#### For OuterTune Scrobbling (Priority 1):
+The OuterTune submodule has uncommitted changes. To complete this feature:
+
+```bash
+cd OuterTune
+git add lastfm/ app/build.gradle.kts app/src/main/java/com/dd3boh/outertune/utils/ScrobbleManager.kt settings.gradle.kts
+git commit -m "Add lastfm module and scrobbling infrastructure"
+git push origin main  # or your working branch
+cd ..
+git add OuterTune
+git commit -m "Update OuterTune submodule with scrobbling support"
+```
+
+Then follow the remaining steps in Phase 3 of the TODO list below.
+
+#### For ArchiveTune External Downloads (Priority 2):
+This requires porting complex file scanner and document utilities from OuterTune. See Phase 2 for details.
+
+---
+
 ## Project Overview
 This document tracks the implementation of two major features:
 1. **Adding External Download Directory support to ArchiveTune** (from OuterTune)
@@ -7,38 +44,43 @@ This document tracks the implementation of two major features:
 
 ## TODO List
 
-### Phase 1: Setup and Analysis ✅
+### Phase 1: Setup and Analysis ✅ COMPLETE
 - [x] Analyze ArchiveTune's scrobbling service implementation
 - [x] Identify download functionality in ArchiveTune
 - [x] Add OuterTune as a git submodule using user's fork
 - [x] Examine OuterTune's download implementation
 - [x] Identify differences in external storage handling
 
-### Phase 2: Add External Download Directory to ArchiveTune 🔄
-- [ ] Add DownloadPathKey and DownloadExtraPathKey preference keys
-- [ ] Create DownloadDirectoryManagerOt class for managing external directories
-- [ ] Create DownloadManagerOt class for file operations
+### Phase 2: Add External Download Directory to ArchiveTune 🔄 IN PROGRESS
+- [x] Add DownloadPathKey and DownloadExtraPathKey preference keys
+- [ ] **MANUAL ACTION NEEDED**: Port utility files from OuterTune
+  - Copy `OuterTune/app/src/main/java/androidx/documentfile/provider/TreeDocumentFileOt.java`
+  - Copy scanner utilities from `OuterTune/app/src/main/java/com/dd3boh/outertune/utils/scanners/`
+- [ ] **MANUAL ACTION NEEDED**: Port download managers
+  - Copy `OuterTune/app/src/main/java/com/dd3boh/outertune/playback/downloadManager/`
+  - Update package names from `com.dd3boh.outertune` to `moe.koiverse.archivetune`
 - [ ] Update DownloadUtil to support external storage paths
 - [ ] Add UI for selecting download directories in settings
-- [ ] Add migration functionality from internal to external storage
 - [ ] Test external download functionality
 
-### Phase 3: Add Scrobbling to OuterTune 🔄
-- [ ] Copy lastfm module to OuterTune submodule
-- [ ] Update OuterTune's settings.gradle.kts to include lastfm module
-- [ ] Copy ScrobbleManager to OuterTune
-- [ ] Add scrobbling constants and preferences
-- [ ] Integrate scrobbling into OuterTune's MusicService
+### Phase 3: Add Scrobbling to OuterTune 🔄 PARTIAL
+- [x] Copy lastfm module to OuterTune submodule
+- [x] Update OuterTune's settings.gradle.kts to include lastfm module
+- [x] Update OuterTune's app build.gradle.kts to depend on lastfm
+- [x] Copy ScrobbleManager to OuterTune
+- [ ] **MANUAL ACTION NEEDED**: Commit OuterTune submodule changes
+  - `cd OuterTune && git add . && git commit -m "Add lastfm module and scrobbling support"`
+  - `git push origin main` (or appropriate branch)
+- [ ] Add scrobbling preference keys to OuterTune
+- [ ] Initialize LastFM in OuterTune's App class
+- [ ] Integrate scrobbling into OuterTune's MusicService  
 - [ ] Add LastFM settings UI to OuterTune
-- [ ] Add LastFM/ListenBrainz integration screen
 - [ ] Test scrobbling in OuterTune
 
-### Phase 4: Documentation and Testing ⏸️
+### Phase 4: Documentation and Testing ⏸️ PENDING
 - [x] Create comprehensive IMPLEMENTATION.md file
-- [ ] Document setup steps for both projects
 - [ ] Document testing procedures
-- [ ] Add troubleshooting guide
-- [ ] Commit and push all changes
+- [ ] Final review and cleanup
 
 ---
 
@@ -104,30 +146,110 @@ UI for:
 
 ### Implementation Steps
 
-1. **Add Constants**
-   - Add DownloadPathKey and DownloadExtraPathKey to PreferenceKeys.kt
+**NOTE**: This is a complex feature requiring significant porting effort. The external download functionality in OuterTune depends on extensive file scanning and DocumentFile utilities.
 
-2. **Create Download Managers**
-   - Create downloadManager package
-   - Port DownloadDirectoryManagerOt
-   - Port DownloadManagerOt
+**STEP 1: Port Required Utility Files**
 
-3. **Update DownloadUtil**
-   - Add external storage support
-   - Add migration functionality
-   - Update download state tracking
+Create directory: `app/src/main/kotlin/moe/koiverse/archivetune/utils/scanners/`
 
-4. **Add Settings UI**
-   - Create StorageSettings screen
-   - Add directory picker
-   - Add migration button
-   - Add scan/rescan controls
+Port these files from `OuterTune/app/src/main/java/com/dd3boh/outertune/utils/scanners/`:
+- `UriFileUtils.kt` - URI and file path conversion utilities
+- Update package from `com.dd3boh.outertune` to `moe.koiverse.archivetune`
 
-5. **Testing**
-   - Test internal downloads still work
-   - Test external directory selection
-   - Test migration from internal to external
-   - Test scan/rescan functionality
+**STEP 2: Port TreeDocumentFileOt**
+
+Copy `OuterTune/app/src/main/java/androidx/documentfile/provider/TreeDocumentFileOt.java` to:
+`app/src/main/java/androidx/documentfile/provider/TreeDocumentFileOt.java`
+
+This extends Android's DocumentFile with media ID tracking.
+
+**STEP 3: Create Download Manager Package**
+
+Create directory: `app/src/main/kotlin/moe/koiverse/archivetune/playback/downloadManager/`
+
+Port these files from `OuterTune/app/src/main/java/com/dd3boh/outertune/playback/downloadManager/`:
+
+1. `DirectoryMangerOt.kt` (note the typo in original name) → `DownloadDirectoryManagerOt.kt`
+   - Manages multiple download directories
+   - Handles file scanning and validation
+   - Update package to `moe.koiverse.archivetune.playback.downloadManager`
+
+2. `DownloadManagerOt.kt`
+   - Handles download operations to external storage
+   - Progress tracking via events
+   - Update package to `moe.koiverse.archivetune.playback.downloadManager`
+
+**STEP 4: Update DownloadUtil**
+
+In `app/src/main/kotlin/moe/koiverse/archivetune/playback/DownloadUtil.kt`:
+
+1. Add imports:
+```kotlin
+import moe.koiverse.archivetune.constants.DownloadPathKey
+import moe.koiverse.archivetune.constants.DownloadExtraPathKey
+import moe.koiverse.archivetune.playback.downloadManager.DownloadDirectoryManagerOt
+import moe.koiverse.archivetune.playback.downloadManager.DownloadManagerOt
+import moe.koiverse.archivetune.utils.scanners.uriListFromString
+```
+
+2. Add new properties:
+```kotlin
+var localMgr = DownloadDirectoryManagerOt(
+    context,
+    context.dataStore.get(DownloadPathKey, "").toUri(),
+    uriListFromString(context.dataStore.get(DownloadExtraPathKey, ""))
+)
+val downloadMgr = DownloadManagerOt(localMgr)
+var isProcessingDownloads = MutableStateFlow(false)
+```
+
+3. Add migration and scanning functions (see OuterTune's DownloadUtil for reference):
+   - `migrateDownloads()` - Migrate from internal to external storage
+   - `scanDownloads()` - Scan and import from external directories
+   - `rescanDownloads()` - Refresh download status
+   - `cd()` - Change directory
+
+**STEP 5: Add Storage Settings UI**
+
+Create `app/src/main/kotlin/moe/koiverse/archivetune/ui/screens/settings/StorageSettings.kt`:
+
+Reference OuterTune's `StorageFrag.kt` for implementation. This should include:
+- Directory picker for main download location
+- Extra directories management
+- Migration button from internal to external storage
+- Scan/rescan controls
+- Storage usage display
+
+**STEP 6: Add to Settings Navigation**
+
+Update your settings navigation to include the new StorageSettings screen.
+
+**STEP 7: Add Required Permissions**
+
+In `AndroidManifest.xml`, ensure you have:
+```xml
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+    android:maxSdkVersion="28" />
+```
+
+For Android 10+, you'll need to handle Storage Access Framework permissions.
+
+**STEP 8: Testing**
+
+1. Test internal downloads still work
+2. Test external directory selection via DocumentsUI
+3. Test downloads save to external directory
+4. Test migration from internal to external
+5. Test scan/rescan finds all files
+6. Test playback from external storage
+7. Test multiple extra directories
+
+**Known Challenges**:
+- LocalMediaScanner is extensive in OuterTune (1583 lines) - may need simplified version
+- TreeDocumentFileOt extends Android framework classes - must remain in androidx package
+- File scanning is CPU-intensive - requires background processing
+- Permissions vary by Android version - need careful handling
 
 ---
 
@@ -203,41 +325,115 @@ Add:
 
 ### Implementation Steps
 
-1. **Copy LastFM Module**
-   - Copy lastfm directory to OuterTune
-   - Update package names from `moe.koiverse.archivetune` to `com.dd3boh.outertune`
-   - Update settings.gradle.kts to include lastfm module
-   - Update OuterTune's app build.gradle.kts to depend on lastfm
+**STEP 1: Commit OuterTune Submodule Changes** (see manual actions above)
 
-2. **Add App Integration**
-   - Initialize LastFM in App.kt
-   - Add API keys (from BuildConfig or GitHub Secrets)
+**STEP 2: Add Scrobbling Preference Keys**
 
-3. **Copy ScrobbleManager**
-   - Port ScrobbleManager.kt
-   - Update package references
-   - Ensure MediaMetadata compatibility
+Add to `OuterTune/app/src/main/java/com/dd3boh/outertune/constants/PreferenceKeys.kt`:
 
-4. **Add Preferences**
-   - Add LastFM preference keys
-   - Add scrobbling configuration keys
+```kotlin
+// Last.fm scrobbling
+val LastFmEnabledKey = booleanPreferencesKey("lastfm_enabled")
+val LastFmUsernameKey = stringPreferencesKey("lastfm_username")
+val LastFmSessionKeyKey = stringPreferencesKey("lastfm_session_key")
+val ScrobbleDelayPercentKey = floatPreferencesKey("scrobble_delay_percent")
+val ScrobbleMinSongDurationKey = intPreferencesKey("scrobble_min_song_duration")
+val ScrobbleDelaySecondsKey = intPreferencesKey("scrobble_delay_seconds")
+val UseNowPlayingKey = booleanPreferencesKey("use_now_playing")
+```
 
-5. **Integrate with MusicService**
-   - Add ScrobbleManager to MusicService
-   - Hook into player state changes
-   - Add configuration loading
+**STEP 3: Initialize LastFM in App Class**
 
-6. **Add Settings UI**
-   - Copy LastFMSettings.kt
-   - Copy IntegrationScreen.kt
-   - Update NavigationBuilder to include new screens
-   - Ensure proper routing
+Find `OuterTune/app/src/main/java/com/dd3boh/outertune/App.kt` and add:
 
-7. **Testing**
-   - Test LastFM authentication
-   - Test scrobbling with various song durations
-   - Test pause/resume behavior
-   - Test Now Playing updates
+```kotlin
+import com.dd3boh.outertune.lastfm.LastFM
+
+// In onCreate() or similar initialization:
+LastFM.initialize(
+    apiKey = BuildConfig.LASTFM_API_KEY,  // You'll need to add these to BuildConfig
+    secret = BuildConfig.LASTFM_SECRET
+)
+```
+
+**STEP 4: Add API Keys**
+
+Add LastFM API keys to your build configuration. You can:
+- Use GitHub Secrets for CI/CD
+- Add to local.properties for local builds
+- Add to BuildConfig in build.gradle.kts
+
+**STEP 5: Integrate into MusicService**
+
+In `OuterTune/app/src/main/java/com/dd3boh/outertune/playback/MusicService.kt`:
+
+1. Add ScrobbleManager field:
+```kotlin
+private var scrobbleManager: ScrobbleManager? = null
+```
+
+2. Initialize in onCreate():
+```kotlin
+// Load preferences
+val lastFmEnabled = dataStore[LastFmEnabledKey] ?: false
+if (lastFmEnabled) {
+    val sessionKey = dataStore[LastFmSessionKeyKey]
+    if (sessionKey != null) {
+        LastFM.sessionKey = sessionKey
+        scrobbleManager = ScrobbleManager(
+            scope = serviceScope,
+            minSongDuration = dataStore[ScrobbleMinSongDurationKey] ?: 30,
+            scrobbleDelayPercent = dataStore[ScrobbleDelayPercentKey] ?: 0.5f,
+            scrobbleDelaySeconds = dataStore[ScrobbleDelaySecondsKey] ?: 180
+        ).apply {
+            useNowPlaying = dataStore[UseNowPlayingKey] ?: true
+        }
+    }
+}
+```
+
+3. Hook into player state changes:
+```kotlin
+// In player listener or where playback state changes
+scrobbleManager?.onPlayerStateChanged(
+    isPlaying = player.isPlaying,
+    metadata = currentMetadata,
+    duration = player.duration
+)
+
+// On song change
+scrobbleManager?.onSongStop()
+scrobbleManager?.onSongStart(newMetadata, newDuration)
+```
+
+4. Cleanup in onDestroy():
+```kotlin
+scrobbleManager?.destroy()
+```
+
+**STEP 6: Add LastFM Settings UI**
+
+This is more involved. You'll need to create a settings screen similar to ArchiveTune's `LastFMSettings.kt`. 
+The file includes:
+- Authentication options (OAuth or username/password)
+- Session status display
+- Configuration options for scrobbling behavior
+- Logout functionality
+
+Reference: `/app/src/main/kotlin/moe/koiverse/archivetune/ui/screens/settings/LastFMSettings.kt` in ArchiveTune
+
+**STEP 7: Add Navigation**
+
+Update OuterTune's navigation/settings to include the LastFM settings screen.
+
+**STEP 8: Testing**
+
+1. Build and run OuterTune
+2. Go to LastFM settings
+3. Authenticate with Last.fm
+4. Play songs and verify scrobbling on Last.fm website
+5. Test pause/resume behavior
+6. Test short songs don't scrobble
 
 ---
 
