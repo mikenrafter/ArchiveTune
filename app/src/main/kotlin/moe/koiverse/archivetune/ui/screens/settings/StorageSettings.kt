@@ -194,7 +194,7 @@ fun StorageSettings(
                 if (downloadPath.isNotEmpty()) {
                     PreferenceEntry(
                         title = { Text("Export downloads to external directory") },
-                        description = "Copy all downloads to the configured external directory",
+                        description = if (exporting) "Exporting..." else "Copy all downloads to the configured external directory",
                         enabled = !exporting,
                         onClick = { exportDownloadsDialog = true },
                     )
@@ -237,7 +237,6 @@ fun StorageSettings(
                             val uri = android.net.Uri.parse(downloadPath)
                             val docDir = DocumentFile.fromTreeUri(context, uri)
                             if (docDir != null && docDir.exists() && docDir.canWrite()) {
-                                val downloadDir = context.filesDir.resolve("download")
                                 var exported = 0
                                 var failed = 0
                                 
@@ -245,22 +244,20 @@ fun StorageSettings(
                                     try {
                                         val cacheSpans = downloadCache.getCachedSpans(key)
                                         if (cacheSpans.isNotEmpty()) {
-                                            // Read from cache
-                                            val outputStream = java.io.ByteArrayOutputStream()
-                                            cacheSpans.forEach { span ->
-                                                span.file?.let { file ->
-                                                    FileInputStream(file).use { input ->
-                                                        input.copyTo(outputStream)
-                                                    }
-                                                }
-                                            }
-                                            
-                                            // Write to external directory
-                                            val fileName = "$key.mka"
+                                            // Create file with video ID for uniqueness
+                                            val fileName = "${key}.mka"
                                             val newFile = docDir.createFile("audio/mka", fileName)
+                                            
                                             if (newFile != null) {
                                                 context.contentResolver.openOutputStream(newFile.uri)?.use { output ->
-                                                    output.write(outputStream.toByteArray())
+                                                    // Stream copy instead of loading into memory
+                                                    cacheSpans.forEach { span ->
+                                                        span.file?.let { file ->
+                                                            FileInputStream(file).use { input ->
+                                                                input.copyTo(output, bufferSize = 8192)
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                                 exported++
                                             } else {
