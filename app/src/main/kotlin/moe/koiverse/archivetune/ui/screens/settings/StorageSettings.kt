@@ -1,5 +1,9 @@
 package moe.koiverse.archivetune.ui.screens.settings
 
+import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -34,12 +38,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
 import androidx.navigation.NavController
 import coil3.annotation.ExperimentalCoilApi
 import coil3.imageLoader
 import moe.koiverse.archivetune.LocalPlayerAwareWindowInsets
 import moe.koiverse.archivetune.LocalPlayerConnection
 import moe.koiverse.archivetune.R
+import moe.koiverse.archivetune.constants.DownloadPathKey
 import moe.koiverse.archivetune.constants.MaxImageCacheSizeKey
 import moe.koiverse.archivetune.constants.MaxSongCacheSizeKey
 import moe.koiverse.archivetune.extensions.tryOrNull
@@ -49,6 +55,7 @@ import moe.koiverse.archivetune.ui.component.IconButton
 import moe.koiverse.archivetune.ui.component.ListPreference
 import moe.koiverse.archivetune.ui.component.PreferenceEntry
 import moe.koiverse.archivetune.ui.component.PreferenceGroupTitle
+import moe.koiverse.archivetune.ui.component.SwitchPreference
 import moe.koiverse.archivetune.ui.utils.backToMain
 import moe.koiverse.archivetune.ui.utils.formatFileSize
 import moe.koiverse.archivetune.utils.rememberPreference
@@ -56,6 +63,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileInputStream
 
 @OptIn(ExperimentalCoilApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +78,10 @@ fun StorageSettings(
     val downloadCache = LocalPlayerConnection.current?.service?.downloadCache ?: return
 
     val coroutineScope = rememberCoroutineScope()
+    val (downloadPath, onDownloadPathChange) = rememberPreference(
+        key = DownloadPathKey,
+        defaultValue = ""
+    )
     val (maxImageCacheSize, onMaxImageCacheSizeChange) = rememberPreference(
         key = MaxImageCacheSizeKey,
         defaultValue = 512
@@ -80,6 +93,21 @@ fun StorageSettings(
     var clearCacheDialog by remember { mutableStateOf(false) }
     var clearDownloads by remember { mutableStateOf(false) }
     var clearImageCacheDialog by remember { mutableStateOf(false) }
+    var exportDownloadsDialog by remember { mutableStateOf(false) }
+    var exporting by remember { mutableStateOf(false) }
+    
+    // Directory picker for external storage
+    val directoryPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        uri?.let {
+            // Persist permission
+            val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            context.contentResolver.takePersistableUriPermission(it, takeFlags)
+            onDownloadPathChange(it.toString())
+            Toast.makeText(context, "External download directory set", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     var imageCacheSize by remember {
         mutableStateOf(imageDiskCache.size)
@@ -159,6 +187,19 @@ fun StorageSettings(
             progress = null,
             actions = {
                 PreferenceEntry(
+                    title = { Text("Select external download directory") },
+                    description = if (downloadPath.isNotEmpty()) "Directory configured" else "Not configured",
+                    onClick = { directoryPicker.launch(null) },
+                )
+                if (downloadPath.isNotEmpty()) {
+                    PreferenceEntry(
+                        title = { Text("Export downloads to external directory") },
+                        description = if (exporting) "Exporting..." else "Copy all downloads to the configured external directory",
+                        enabled = !exporting,
+                        onClick = { exportDownloadsDialog = true },
+                    )
+                }
+                PreferenceEntry(
                     title = { Text(stringResource(R.string.clear_all_downloads)) },
                     onClick = { clearDownloads = true },
                 )
@@ -180,6 +221,78 @@ fun StorageSettings(
                 onCancel = { clearDownloads = false },
                 content = {
                     Text(text = stringResource(R.string.clear_downloads_dialog))
+                }
+            )
+        }
+        
+        if (exportDownloadsDialog) {
+            ActionPromptDialog(
+                title = "Export downloads",
+                onDismiss = { exportDownloadsDialog = false },
+                onConfirm = {
+                    exportDownloadsDialog = false
+                    exporting = true
+                    coroutineScope.launch(Dispatchers.IO) {
+                        try {
+                            val uri = android.net.Uri.parse(downloadPath)
+                            val docDir = DocumentFile.fromTreeUri(context, uri)
+                            if (docDir != null && docDir.exists() && docDir.canWrite()) {
+                                var exported = 0
+                                var failed = 0
+                                
+                                downloadCache.keys.forEach { key ->
+                                    try {
+                                        val cacheSpans = downloadCache.getCachedSpans(key)
+                                        if (cacheSpans.isNotEmpty()) {
+                                            // Create file with video ID for uniqueness
+                                            val fileName = "${key}.mka"
+                                            val newFile = docDir.createFile("audio/mka", fileName)
+                                            
+                                            if (newFile != null) {
+                                                context.contentResolver.openOutputStream(newFile.uri)?.use { output ->
+                                                    // Stream copy instead of loading into memory
+                                                    cacheSpans.forEach { span ->
+                                                        span.file?.let { file ->
+                                                            FileInputStream(file).use { input ->
+                                                                input.copyTo(output, bufferSize = 8192)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                exported++
+                                            } else {
+                                                failed++
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        failed++
+                                    }
+                                }
+                                
+                                launch(Dispatchers.Main) {
+                                    Toast.makeText(
+                                        context,
+                                        "Exported $exported files${if (failed > 0) ", $failed failed" else ""}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            } else {
+                                launch(Dispatchers.Main) {
+                                    Toast.makeText(context, "External directory not accessible", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } catch (e: Exception) {
+                            launch(Dispatchers.Main) {
+                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        } finally {
+                            exporting = false
+                        }
+                    }
+                },
+                onCancel = { exportDownloadsDialog = false },
+                content = {
+                    Text(text = "This will copy all downloaded songs to the external directory. This may take a while.")
                 }
             )
         }
